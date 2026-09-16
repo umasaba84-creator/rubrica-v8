@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluación Automática de Ensayos por Nivel Académico</title>
+    <!-- Librería para lectura de PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: var(--surface);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1e293b;
+            margin-bottom: 6px;
+            font-size: 1.5rem;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: #64748b;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+        }
+
+        .config-card {
+            background: #eff6ff;
+            border: 1px dashed #93c5fd;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #334155;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.9rem;
+        }
+
+        .upload-section {
+            background: #f1f5f9;
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .btn-eval {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .btn-eval:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-eval:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .status-msg {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: #475569;
+            font-weight: 500;
+        }
+
+        .canvas-container {
+            width: 100%;
+            overflow-x: auto;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+
+        canvas {
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .results-panel {
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .metric {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+        .metric-title {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-top: 2px;
+        }
+
+        .feedback-card {
+            background: #fffbe3;
+            border: 1px solid #ffe58f;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #1e1b4b;
+        }
+
+        .actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 15px;
+        }
+
+        .reset-btn {
+            background-color: #64748b;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Rúbrica Avanzada de Evaluación de Ensayos</h1>
+    <p class="subtitle">Evaluación automática por IA con ajuste de rigor académico</p>
+
+    <div class="config-card">
+        <label for="academicLevel">Nivel Académico del Grupo:</label>
+        <select id="academicLevel">
+            <option value="Licenciatura">Licenciatura (Enfoque: Argumentación y Fuentes)</option>
+            <option value="Maestría">Maestría (Enfoque: Análisis Crítico y Marco Teórico)</option>
+            <option value="Doctorado">Doctorado (Enfoque: Epistemología e Innovación)</option>
+        </select>
+    </div>
+
+    <div class="upload-section">
+        <input type="file" id="fileInput" accept=".pdf">
+        <button class="btn-eval" id="evalBtn" onclick="procesarYEvaluar()" disabled>⚡ Evaluar Ensayo con IA</button>
+        <div class="status-msg" id="status">Selecciona un archivo PDF para comenzar</div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="rubricCanvas" width="860" height="580"></canvas>
+    </div>
+
+    <div class="results-panel">
+        <div class="metric">
+            <div class="metric-title">Puntaje Total</div>
+            <div class="metric-value" id="totalScore">0 / 32</div>
+        </div>
+        <div class="metric">
+            <div class="metric-title">Calificación Decimal</div>
+            <div class="metric-value" id="decimalScore">0.0 / 10</div>
+        </div>
+        <div class="metric">
+            <div class="metric-title">Nivel Alcanzado</div>
+            <div class="metric-value" id="performanceLevel" style="font-size: 0.95rem; color: #334155;">Pendiente</div>
+        </div>
+    </div>
+
+    <div class="feedback-card" id="feedbackBox">
+        <strong>Dictamen Cualitativo de la IA:</strong> Adjunta un archivo y haz clic en "Evaluar Ensayo con IA" para recibir el desglose y recomendaciones.
+    </div>
+
+    <div class="actions">
+        <button class="reset-btn" id="resetBtn">Reiniciar Rúbrica</button>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    // CLAVE API PRECONFIGURADA INTERNAMENTE
+    const API_KEY = "AQ.Ab8RN6K_1-Cm2Yx-nnmon1ILoDT5Es7R4VAbRae1Gyeu70wtLg";
+
+    const canvas = document.getElementById('rubricCanvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const statusDisplay = document.getElementById('status');
+
+    const criteria = [
+        "1. Tesis y Postura Teórica",
+        "2. Estructura y Coherencia",
+        "3. Argumentación y Análisis",
+        "4. Fundamentación y Fuentes",
+        "5. Citas y Normas (APA/IEEE)",
+        "6. Sintaxis y Estilo Académico",
+        "7. Aporte y Crítica Propia",
+        "8. Conclusiones y Propuesta"
+    ];
+
+    const levels = [
+        { name: "Excelente", pts: 4 },
+        { name: "Bueno", pts: 3 },
+        { name: "Aceptable", pts: 2 },
+        { name: "Deficiente", pts: 1 }
+    ];
+
+    let selections = new Array(criteria.length).fill(0);
+    let extractedText = "";
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        statusDisplay.innerText = "Leyendo el documento PDF...";
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            extractedText = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                extractedText += content.items.map(item => item.str).join(" ") + "\n";
+            }
+            statusDisplay.innerText = `📄 Documento listo (${pdf.numPages} páginas leídas). Haz clic en evaluar.`;
+            document.getElementById('evalBtn').disabled = false;
+        } catch (err) {
+            statusDisplay.innerText = "Error al leer el archivo PDF. Intenta con otro documento.";
+        }
+    });
+
+    async function procesarYEvaluar() {
+        const level = document.getElementById('academicLevel').value;
+
+        statusDisplay.innerText = "Analizando ensayo con IA (Gemini 2.5 Flash)...";
+        document.getElementById('evalBtn').disabled = true;
+
+        const promptText = `Actúa como un profesor universitario y revisor académico muy riguroso de nivel ${level}. 
+Analiza el siguiente texto de un ensayo y evalúalo en base a los 8 criterios de la rúbrica.
+
+Asigna una puntuación entera de 1 a 4 para cada criterio:
+1. Tesis y Postura Teórica (1 a 4)
+2. Estructura y Coherencia (1 a 4)
+3. Argumentación y Análisis (1 a 4)
+4. Fundamentación y Fuentes (1 a 4)
+5. Citas y Normas (1 a 4)
+6. Sintaxis y Estilo Académico (1 a 4)
+7. Aporte y Crítica Propia (1 a 4)
+8. Conclusiones y Propuesta (1 a 4)
+
+ESCALA DE EVALUACIÓN: 4=Excelente, 3=Bueno, 2=Aceptable, 1=Deficiente.
+
+Responde ÚNICAMENTE con un JSON con este formato exacto:
+{"puntajes": [4, 3, 3, 2, 4, 3, 2, 3], "retroalimentacion": "Escribe un dictamen cualitativo detallado."}
+
+Texto a evaluar:
+${extractedText.substring(0, 14000)}`;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: promptText }]
+                    }]
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.error) {
+                throw new Error(data.error.message || "Error en la API de Gemini");
+            }
+
+            let rawText = data.candidates[0].content.parts[0].text;
+            rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+            const parsed = JSON.parse(rawText);
+
+            if (parsed.puntajes && Array.isArray(parsed.puntajes)) {
+                selections = parsed.puntajes;
+            }
+            document.getElementById('feedbackBox').innerHTML = `<strong>Dictamen Cualitativo (${level}):</strong><br>${parsed.retroalimentacion || 'Evaluación completada.'}`;
+            statusDisplay.innerText = "¡Evaluación completada con éxito!";
+            draw();
+            updateScore();
+        } catch (err) {
+            console.error(err);
+            statusDisplay.innerText = "Error: " + err.message;
+        } finally {
+            document.getElementById('evalBtn').disabled = false;
+        }
+    }
+
+    const margin = 5;
+    const headerHeight = 45;
+    const rowHeaderWidth = 220;
+    const cellWidth = (canvas.width - rowHeaderWidth - margin * 2) / 4;
+    const rowHeight = (canvas.height - headerHeight - margin * 2) / criteria.length;
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(rowHeaderWidth, margin, cellWidth * 4, headerHeight);
+
+        ctx.font = "bold 13px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        levels.forEach((level, i) => {
+            const x = rowHeaderWidth + i * cellWidth + cellWidth / 2;
+            const y = margin + headerHeight / 2;
+            ctx.fillStyle = "#ffffff";
+            ctx.fillText(`${level.name} (${level.pts} pts)`, x, y);
+        });
+
+        criteria.forEach((criterion, rowIndex) => {
+            const y = margin + headerHeight + rowIndex * rowHeight;
+
+            ctx.fillStyle = "#f8fafc";
+            ctx.fillRect(margin, y, rowHeaderWidth, rowHeight);
+            ctx.strokeStyle = "#cbd5e1";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(margin, y, rowHeaderWidth, rowHeight);
+
+            ctx.fillStyle = "#0f172a";
+            ctx.font = "bold 11px system-ui";
+            ctx.textAlign = "left";
+            ctx.fillText(criterion, margin + 8, y + rowHeight / 2);
+
+            levels.forEach((level, colIndex) => {
+                const x = rowHeaderWidth + colIndex * cellWidth;
+                const isSelected = selections[rowIndex] === level.pts;
+
+                ctx.fillStyle = isSelected ? "#dbeafe" : "#ffffff";
+                ctx.fillRect(x, y, cellWidth, rowHeight);
+
+                ctx.strokeStyle = isSelected ? "#2563eb" : "#e2e8f0";
+                ctx.lineWidth = isSelected ? 2 : 1;
+                ctx.strokeRect(x, y, cellWidth, rowHeight);
+
+                ctx.fillStyle = isSelected ? "#1d4ed8" : "#64748b";
+                ctx.font = isSelected ? "bold 12px system-ui" : "11px system-ui";
+                ctx.textAlign = "center";
+
+                const label = isSelected ? `✓ ${level.pts} Pts` : `${level.pts} pts`;
+                ctx.fillText(label, x + cellWidth / 2, y + rowHeight / 2);
+            });
+        });
+    }
+
+    function updateScore() {
+        const total = selections.reduce((a, b) => a + b, 0);
+        const decimal = ((total / 32) * 10).toFixed(1);
+
+        document.getElementById('totalScore').innerText = `${total} / 32`;
+        document.getElementById('decimalScore').innerText = `${decimal} / 10`;
+
+        let levelText = "Pendiente";
+        if (total >= 28) levelText = "Sobresaliente";
+        else if (total >= 22) levelText = "Satisfactorio";
+        else if (total >= 16) levelText = "Suficiente";
+        else if (total > 0) levelText = "Insuficiente";
+
+        document.getElementById('performanceLevel').innerText = levelText;
+    }
+
+    canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        if (mouseX > rowHeaderWidth && mouseY > margin + headerHeight) {
+            const colIndex = Math.floor((mouseX - rowHeaderWidth) / cellWidth);
+            const rowIndex = Math.floor((mouseY - (margin + headerHeight)) / rowHeight);
+
+            if (rowIndex >= 0 && rowIndex < criteria.length && colIndex >= 0 && colIndex < 4) {
+                const selectedPts = levels[colIndex].pts;
+                selections[rowIndex] = selections[rowIndex] === selectedPts ? 0 : selectedPts;
+                draw();
+                updateScore();
+            }
+        }
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+        selections = new Array(criteria.length).fill(0);
+        fileInput.value = "";
+        extractedText = "";
+        statusDisplay.innerText = "Selecciona un archivo PDF para comenzar";
+        document.getElementById('feedbackBox').innerText = "Dictamen Cualitativo de la IA: Adjunta un archivo y haz clic en 'Evaluar Ensayo con IA' para recibir el desglose y recomendaciones.";
+        document.getElementById('evalBtn').disabled = true;
+        draw();
+        updateScore();
+    });
+
+    draw();
+</script>
+
+</body>
+</html>
