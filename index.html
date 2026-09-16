@@ -53,8 +53,16 @@
             background: #eff6ff;
             border: 1px dashed #93c5fd;
             border-radius: 8px;
-            padding: 12px 15px;
+            padding: 15px;
             margin-bottom: 15px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
         }
 
         label {
@@ -65,9 +73,9 @@
             margin-bottom: 4px;
         }
 
-        select {
+        input[type="password"], input[type="text"], select {
             width: 100%;
-            padding: 8px;
+            padding: 8px 12px;
             border: 1px solid #cbd5e1;
             border-radius: 6px;
             box-sizing: border-box;
@@ -110,6 +118,7 @@
             font-size: 0.85rem;
             color: #475569;
             font-weight: 500;
+            word-break: break-word;
         }
 
         .canvas-container {
@@ -183,6 +192,12 @@
             border-radius: 6px;
             cursor: pointer;
         }
+
+        .key-hint {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body>
@@ -192,12 +207,19 @@
     <p class="subtitle">Evaluación automática por IA con ajuste de rigor académico</p>
 
     <div class="config-card">
-        <label for="academicLevel">Nivel Académico del Grupo:</label>
-        <select id="academicLevel">
-            <option value="Licenciatura">Licenciatura (Enfoque: Argumentación y Fuentes)</option>
-            <option value="Maestría">Maestría (Enfoque: Análisis Crítico y Marco Teórico)</option>
-            <option value="Doctorado">Doctorado (Enfoque: Epistemología e Innovación)</option>
-        </select>
+        <div class="form-group">
+            <label for="apiKey">Clave API de Gemini (Google AI Studio):</label>
+            <input type="password" id="apiKey" placeholder="Pega aquí tu API Key (ej. AIzaSy...)" value="">
+            <div class="key-hint">Obtén tu API Key gratuita en <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>. Las claves que empiezan con <code>AQ.Ab...</code> son tokens internos de GCP y no funcionan en la web directa.</div>
+        </div>
+        <div class="form-group" style="margin-top: 10px;">
+            <label for="academicLevel">Nivel Académico del Grupo:</label>
+            <select id="academicLevel">
+                <option value="Licenciatura">Licenciatura (Enfoque: Argumentación y Fuentes)</option>
+                <option value="Maestría" selected>Maestría (Enfoque: Análisis Crítico y Marco Teórico)</option>
+                <option value="Doctorado">Doctorado (Enfoque: Epistemología e Innovación)</option>
+            </select>
+        </div>
     </div>
 
     <div class="upload-section">
@@ -226,7 +248,7 @@
     </div>
 
     <div class="feedback-card" id="feedbackBox">
-        <strong>Dictamen Cualitativo de la IA:</strong> Adjunta un archivo y haz clic en "Evaluar Ensayo con IA" para recibir el desglose y recomendaciones.
+        <strong>Dictamen Cualitativo de la IA:</strong> Ingresa tu API Key de Google AI Studio, adjunta un archivo PDF y haz clic en "Evaluar Ensayo con IA".
     </div>
 
     <div class="actions">
@@ -237,13 +259,20 @@
 <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-    // CLAVE API PRECONFIGURADA INTERNAMENTE
-    const API_KEY = "AQ.Ab8RN6K_1-Cm2Yx-nnmon1ILoDT5Es7R4VAbRae1Gyeu70wtLg";
-
     const canvas = document.getElementById('rubricCanvas');
     const ctx = canvas.getContext('2d');
     const fileInput = document.getElementById('fileInput');
     const statusDisplay = document.getElementById('status');
+    const apiKeyInput = document.getElementById('apiKey');
+
+    // Recuperar API Key guardada en localStorage si existe
+    if (localStorage.getItem('gemini_api_key')) {
+        apiKeyInput.value = localStorage.getItem('gemini_api_key');
+    }
+
+    apiKeyInput.addEventListener('change', () => {
+        localStorage.setItem('gemini_api_key', apiKeyInput.value.trim());
+    });
 
     const criteria = [
         "1. Tesis y Postura Teórica",
@@ -288,6 +317,12 @@
     });
 
     async function procesarYEvaluar() {
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+            alert("Por favor ingresa tu API Key de Google AI Studio.");
+            return;
+        }
+
         const level = document.getElementById('academicLevel').value;
 
         statusDisplay.innerText = "Analizando ensayo con IA (Gemini 2.5 Flash)...";
@@ -314,7 +349,7 @@ Responde ÚNICAMENTE con un JSON con este formato exacto:
 Texto a evaluar:
 ${extractedText.substring(0, 14000)}`;
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         try {
             const response = await fetch(url, {
@@ -338,9 +373,12 @@ ${extractedText.substring(0, 14000)}`;
 
             const parsed = JSON.parse(rawText);
 
-            if (parsed.puntajes && Array.isArray(parsed.puntajes)) {
+            if (parsed.puntajes && Array.isArray(parsed.parsed ? parsed.puntajes : [])) {
+                selections = parsed.puntajes;
+            } else if (parsed.puntajes) {
                 selections = parsed.puntajes;
             }
+
             document.getElementById('feedbackBox').innerHTML = `<strong>Dictamen Cualitativo (${level}):</strong><br>${parsed.retroalimentacion || 'Evaluación completada.'}`;
             statusDisplay.innerText = "¡Evaluación completada con éxito!";
             draw();
@@ -452,7 +490,7 @@ ${extractedText.substring(0, 14000)}`;
         fileInput.value = "";
         extractedText = "";
         statusDisplay.innerText = "Selecciona un archivo PDF para comenzar";
-        document.getElementById('feedbackBox').innerText = "Dictamen Cualitativo de la IA: Adjunta un archivo y haz clic en 'Evaluar Ensayo con IA' para recibir el desglose y recomendaciones.";
+        document.getElementById('feedbackBox').innerText = "Dictamen Cualitativo de la IA: Ingresa tu API Key de Google AI Studio, adjunta un archivo PDF y haz clic en 'Evaluar Ensayo con IA'.";
         document.getElementById('evalBtn').disabled = true;
         draw();
         updateScore();
@@ -462,4 +500,7 @@ ${extractedText.substring(0, 14000)}`;
 </script>
 
 </body>
-</html>
+</html>  
+        
+       
+               
